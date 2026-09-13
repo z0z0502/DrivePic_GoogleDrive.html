@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DrivePic App - المحول الشامل واستضافة الصور المباشرة</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <!-- Google Fonts: Cairo & Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cairo', 'sans-serif'],
+                        mono: ['Plus Jakarta Sans', 'monospace']
+                    },
+                    colors: {
+                        app: {
+                            bg: '#090d16',
+                            card: '#121a29',
+                            border: 'rgba(255, 255, 255, 0.08)',
+                            primary: '#6366f1',
+                            primaryHover: '#4f46e5',
+                            accent: '#8b5cf6',
+                            emerald: '#10b981'
+                        }
+                    },
+                    boxShadow: {
+                        'glow': '0 0 25px -5px rgba(99, 102, 241, 0.35)',
+                        'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.35)',
+                        'app': '0 20px 40px -15px rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        input, textarea, p, span, h1, h2, h3, h4, code {
+            user-select: text;
+        }
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #070a11;
+            color: #f1f5f9;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        .glass-panel {
+            background: rgba(18, 26, 41, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-header {
+            background: rgba(11, 16, 26, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .app-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: #6366f1;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .btn-active {
+            transition: transform 0.1s ease, background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .btn-active:active {
+            transform: scale(0.96);
+        }
+
+        .app-shell {
+            max-width: 480px;
+            width: 100%;
+            min-height: 100vh;
+            margin: 0 auto;
+        }
+
+        @media (min-width: 640px) {
+            .app-shell {
+                min-height: calc(100vh - 40px);
+                margin: 20px auto;
+                border-radius: 36px;
+                box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+                overflow: hidden;
+            }
+        }
+
+        .checker-bg {
+            background-image: linear-gradient(45deg, #131b2e 25%, transparent 25%), linear-gradient(-45deg, #131b2e 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #131b2e 75%), linear-gradient(-45deg, transparent 75%, #131b2e 75%);
+            background-size: 16px 16px;
+            background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+        }
+    </style>
+</head>
+<body class="sm:py-4 bg-slate-950 flex items-center justify-center min-h-screen">
+
+    <!-- App Shell -->
+    <div class="app-shell bg-slate-950 flex flex-col justify-between relative overflow-hidden text-slate-100">
+        
+        <!-- App Top Header -->
+        <header class="glass-header sticky top-0 z-40 px-5 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-glow text-white">
+                    <i class="fa-solid fa-bolt text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-bold text-white tracking-wide leading-tight flex items-center gap-1.5">
+                        DrivePic
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-medium">Ultra</span>
+                    </h1>
+                    <p class="text-[11px] text-slate-400">محول ومستضيف الصور المباشرة</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button id="quickUploadTopBtn" title="رفع مباشر" class="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:text-white flex items-center justify-center btn-active">
+                    <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                </button>
+                <a href="https://drive.google.com" target="_blank" title="Google Drive" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 text-amber-400 hover:bg-slate-800 flex items-center justify-center btn-active">
+                    <i class="fa-brands fa-google-drive text-sm"></i>
+                </a>
+            </div>
+        </header>
+
+        <!-- Dynamic Main Content Tabs -->
+        <main class="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4 pb-24">
+
+            <!-- TAB 1: CONVERTER (Default View) -->
+            <div id="tabConverter" class="flex flex-col gap-4">
+                
+                <!-- Input Box Container -->
+                <section class="glass-panel rounded-2xl p-4 shadow-app flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <label for="driveUrlInput" class="text-xs font-bold text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-link text-indigo-400"></i>
+                            رابط Drive أو Dropbox أو صورة مباشرة
+                        </label>
+                        <button id="pasteBtn" class="text-[11px] text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20 flex items-center gap-1 transition">
+                            <i class="fa-solid fa-paste"></i> لصق
+                        </button>
+                    </div>
+
+                    <div class="relative flex items-center">
+                        <input type="text" id="driveUrlInput" 
+                               placeholder="ضع رابط جوجل درايف أو دروب بوكس..." 
+                               class="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-3 text-xs font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition dir-ltr pr-9">
+                        <button id="clearInputBtn" class="absolute left-3 text-slate-500 hover:text-slate-300 hidden">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+
+                    <button id="convertBtn" class="w-full py-3 bg-gradient-to-r from-indigo-600 via-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-glow transition flex items-center justify-center gap-2 btn-active">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>تحويل واستخراج الرابط المباشر</span>
+                    </button>
+                </section>
+
+                <!-- Live Preview Card & Controls -->
+                <section class="glass-panel rounded-2xl p-4 shadow-app flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <h2 class="text-xs font-bold text-slate-200">المعاينة والأدوات</h2>
+                        </div>
+
+                        <!-- Zoom & Interactive Controls Bar -->
+                        <div class="flex items-center gap-1">
+                            <button id="rotateBtn" title="تدوير الصورة" class="w-7 h-7 bg-slate-900 text-slate-300 border border-slate-800 rounded-lg text-xs flex items-center justify-center btn-active">
+                                <i class="fa-solid fa-rotate"></i>
+                            </button>
+                            <button id="zoomInBtn" title="تكبير" class="w-7 h-7 bg-slate-900 text-slate-300 border border-slate-800 rounded-lg text-xs flex items-center justify-center btn-active">
+                                <i class="fa-solid fa-magnifying-glass-plus"></i>
+                            </button>
+                            <button id="zoomOutBtn" title="تصغير" class="w-7 h-7 bg-slate-900 text-slate-300 border border-slate-800 rounded-lg text-xs flex items-center justify-center btn-active">
+                                <i class="fa-solid fa-magnifying-glass-minus"></i>
+                            </button>
+                            <button id="fullScreenBtn" title="ملء الشاشة" class="w-7 h-7 bg-slate-900 text-slate-300 border border-slate-800 rounded-lg text-xs flex items-center justify-center btn-active">
+                                <i class="fa-solid fa-expand"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Display Viewport -->
+                    <div class="relative w-full h-[260px] checker-bg rounded-xl border border-slate-800/80 overflow-hidden flex items-center justify-center group">
+                        
+                        <!-- Loading State -->
+                        <div id="imageLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-sm z-10 gap-2.5">
+                            <div class="app-spinner"></div>
+                            <p class="text-[11px] text-slate-400 font-medium">جاري معالجة الصورة واستخراجها...</p>
+                        </div>
+
+                        <!-- Restrict Access Error Display -->
+                        <div id="imageError" class="hidden absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-950/95 z-20 gap-3 overflow-y-auto">
+                            <div class="w-11 h-11 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center">
+                                <i class="fa-solid fa-lock text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xs font-bold text-rose-400">الصورة محظورة بسبب الصلاحيات</h3>
+                                <p class="text-[11px] text-slate-400 mt-1 leading-relaxed max-w-xs">
+                                    تأكد من اختيار <span class="text-emerald-400 font-bold">"أي شخص لديه الرابط"</span> في إعدادات مشاركة Google Drive.
+                                </p>
+                            </div>
+                            <button id="retryBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-glow flex items-center gap-1.5 btn-active">
+                                <i class="fa-solid fa-rotate-right text-xs"></i>
+                                <span>إعادة المحاولة</span>
+                            </button>
+                        </div>
+
+                        <!-- Target Rendered Image -->
+                        <img id="mainViewerImage" 
+                             src="" 
+                             alt="معاينة الصورة المباشرة" 
+                             class="max-w-full max-h-full object-contain transition-transform duration-200">
+                    </div>
+
+                    <!-- Image Meta Data Bar -->
+                    <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+                        <span class="flex items-center gap-1.5 truncate">
+                            <i class="fa-solid fa-microchip text-indigo-400"></i>
+                            <span id="currentServerName" class="font-mono text-slate-300 truncate">LH3 Direct CDN</span>
+                        </span>
+                        <span class="font-mono text-[10px] text-slate-400">
+                            الأبعاد: <span id="imageDimensions" class="text-emerald-400 font-bold">جاري القياس...</span>
+                        </span>
+                    </div>
+                </section>
+
+                <!-- Server Links Selector Grid -->
+                <section class="glass-panel rounded-2xl p-4 shadow-app flex flex-col gap-3">
+                    <h3 class="text-xs font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-server text-purple-400"></i>
+                        اختيار السيرفر والروابط المباشرة
+                    </h3>
+
+                    <div class="grid grid-cols-1 gap-2.5">
+                        <!-- Server 1 -->
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-indigo-500/30 flex flex-col gap-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bolt"></i> سيرفر Google LH3 المباشر
+                                </span>
+                                <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold">الأسرع</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="directUrlLh3" readonly class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-[11px] font-mono text-slate-300 focus:outline-none dir-ltr">
+                                <button onclick="copyLink('directUrlLh3')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 btn-active">
+                                    <i class="fa-solid fa-copy"></i>
+                                    <span>نسخ</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Server 2 -->
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex flex-col gap-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-image text-indigo-400"></i> سيرفر المصغرة عالية الدقة (Thumbnail)
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="directUrlThumb" readonly class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-[11px] font-mono text-slate-400 focus:outline-none dir-ltr">
+                                <button onclick="copyLink('directUrlThumb')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 border border-slate-700 btn-active">
+                                    <i class="fa-solid fa-copy"></i>
+                                    <span>نسخ</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Server 3 -->
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex flex-col gap-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-cloud text-purple-400"></i> رابط التصدير والمشاركات السحابية
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="directUrlUc" readonly class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-[11px] font-mono text-slate-400 focus:outline-none dir-ltr">
+                                <button onclick="copyLink('directUrlUc')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 border border-slate-700 btn-active">
+                                    <i class="fa-solid fa-copy"></i>
+                                    <span>نسخ</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Code Snippets Generator Section -->
+                <section class="glass-panel rounded-2xl p-4 shadow-app flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-code text-indigo-400"></i>
+                            مولد الأكواد البرمجية للمطورين
+                        </h3>
+                    </div>
+
+                    <!-- Code Type Tabs -->
+                    <div class="flex items-center gap-1.5 p-1 bg-slate-900/80 rounded-xl border border-slate-800 text-[11px]">
+                        <button onclick="switchCodeTab('html')" id="codeTabHtml" class="flex-1 py-1.5 rounded-lg font-bold bg-indigo-600 text-white transition">HTML</button>
+                        <button onclick="switchCodeTab('css')" id="codeTabCss" class="flex-1 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">CSS</button>
+                        <button onclick="switchCodeTab('md')" id="codeTabMd" class="flex-1 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">Markdown</button>
+                        <button onclick="switchCodeTab('bb')" id="codeTabBb" class="flex-1 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">BBCode</button>
+                    </div>
+
+                    <div class="relative">
+                        <textarea id="codeSnippetBox" readonly rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-[11px] font-mono text-indigo-300 focus:outline-none dir-ltr resize-none"></textarea>
+                        <button onclick="copyCodeSnippet()" class="absolute bottom-3 left-3 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 btn-active shadow-glow">
+                            <i class="fa-solid fa-copy"></i>
+                            <span>نسخ الكود</span>
+                        </button>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- TAB 2: DIRECT UPLOAD -->
+            <div id="tabUpload" class="hidden flex flex-col gap-4">
+                <section class="glass-panel rounded-2xl p-4 shadow-app flex flex-col gap-4">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up text-indigo-400"></i>
+                            رفع مباشر واستضافة صور فورية
+                        </h3>
+                        <p class="text-[11px] text-slate-400 mt-1">ارفع أي صورة مباشرة من جهازك للحصول على رابط مباشر دائم وسريع.</p>
+                    </div>
+
+                    <!-- Drag and Drop Zone -->
+                    <div id="dropZone" class="border-2 border-dashed border-indigo-500/40 hover:border-indigo-500 bg-slate-900/50 hover:bg-slate-900/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-3 transition cursor-pointer">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-image"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-slate-200">اضغط هنا أو اسحب الصورة إلى هنا</p>
+                            <p class="text-[10px] text-slate-500 mt-1">يدعم PNG, JPG, WEBP, GIF حتى 10MB</p>
+                        </div>
+                        <input type="file" id="fileInput" accept="image/*" class="hidden">
+                    </div>
+
+                    <!-- Google Drive OAuth Setup -->
+                    <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col gap-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-bold text-slate-200 flex items-center gap-1.5"><i class="fa-brands fa-google text-amber-400"></i> ربط Google Drive</span>
+                            <span id="driveAuthStatus" class="text-[10px] text-amber-300">غير متصل</span>
+                        </div>
+                        <p class="text-[10px] leading-relaxed text-slate-500">أدخل OAuth Client ID من Google Cloud مرة واحدة. لا تضع أي مفتاح سري داخل الصفحة.</p>
+                        <div class="flex gap-2">
+                            <input id="googleClientIdInput" type="text" dir="ltr" placeholder="123...apps.googleusercontent.com" class="min-w-0 flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-indigo-500">
+                            <button id="connectDriveBtn" class="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/25 rounded-lg text-[10px] font-bold whitespace-nowrap btn-active">تسجيل الدخول</button>
+                        </div>
+                        <p class="text-[10px] text-slate-600">فعّل Google Drive API وأنشئ OAuth Client من نوع Web application، وأضف نطاق الموقع ضمن Authorized JavaScript origins.</p>
+                    </div>
+
+                    <!-- Upload Result -->
+                    <div id="uploadResult" class="hidden p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/25 flex flex-col gap-2">
+                        <div class="flex items-center gap-2 text-emerald-300 text-[11px] font-bold"><i class="fa-solid fa-circle-check"></i> تم الرفع إلى Google Drive</div>
+                        <input id="uploadedDirectUrl" readonly dir="ltr" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-[10px] font-mono text-emerald-300 focus:outline-none">
+                        <div class="flex gap-2">
+                            <button id="copyUploadedUrlBtn" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold btn-active"><i class="fa-solid fa-copy"></i> نسخ الرابط المباشر</button>
+                            <button id="viewUploadedBtn" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-bold btn-active">عرض</button>
+                        </div>
+                    </div>
+
+                    <!-- External Fast Upload Links Alternative -->
+                    <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80">
+                        <span class="text-[11px] font-bold text-slate-300 block mb-2">أو رفع مباشر عبر المواقع العالمية:</span>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <a href="https://imgbb.com" target="_blank" class="p-2 bg-slate-950 hover:bg-slate-800 rounded-lg border border-slate-800 flex items-center justify-between text-slate-300 font-medium">
+                                <span>ImgBB</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-500"></i>
+                            </a>
+                            <a href="https://postimages.org" target="_blank" class="p-2 bg-slate-950 hover:bg-slate-800 rounded-lg border border-slate-800 flex items-center justify-between text-slate-300 font-medium">
+                                <span>Postimages</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-500"></i>
+                            </a>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 3: HISTORY LOG -->
+            <div id="tabHistory" class="hidden flex flex-col gap-4">
+                <section class="glass-panel rounded-2xl p-4 shadow-app flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-amber-400"></i>
+                            سجل الصور والروابط السابقة
+                        </h3>
+                        <button id="clearHistoryBtn" class="text-[10px] text-rose-400 hover:text-rose-300 bg-rose-500/10 px-2 py-1 rounded-lg border border-rose-500/20">
+                            مسح السجل
+                        </button>
+                    </div>
+
+                    <!-- History List Items -->
+                    <div id="historyListContainer" class="flex flex-col gap-2 max-h-[400px] overflow-y-auto no-scrollbar">
+                        <!-- Dynamic History Items Generated Here -->
+                        <div class="text-center py-8 text-slate-500 text-xs">
+                            لا يوجد صور محولة في السجل حالياً
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+        </main>
+
+        <!-- Navigation Bar -->
+        <nav class="glass-header absolute bottom-0 left-0 right-0 py-2.5 px-6 flex items-center justify-around z-40 border-t border-slate-800/80">
+            <button onclick="switchMainTab('converter')" id="navBtnConverter" class="flex flex-col items-center gap-1 text-indigo-400 transition">
+                <i class="fa-solid fa-wand-magic-sparkles text-base"></i>
+                <span class="text-[10px] font-bold">التحويل</span>
+            </button>
+            <button onclick="switchMainTab('upload')" id="navBtnUpload" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 transition">
+                <i class="fa-solid fa-cloud-arrow-up text-base"></i>
+                <span class="text-[10px] font-medium">رفع مباشر</span>
+            </button>
+            <button onclick="switchMainTab('history')" id="navBtnHistory" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 transition">
+                <i class="fa-solid fa-clock-rotate-left text-base"></i>
+                <span class="text-[10px] font-medium">السجل</span>
+            </button>
+        </nav>
+
+        <!-- Toast Notification Alert -->
+        <div id="toast" class="fixed bottom-16 left-1/2 -translate-x-1/2 translate-y-10 opacity-0 pointer-events-none transition-all duration-300 bg-slate-900/95 text-white border border-indigo-500/40 px-4 py-2.5 rounded-2xl shadow-glow flex items-center gap-2.5 z-50 whitespace-nowrap backdrop-blur-md">
+            <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+            <span id="toastMessage" class="text-xs font-medium">تمت العملية بنجاح!</span>
+        </div>
+
+    </div>
+
+    <!-- Fullscreen Lightbox Modal -->
+    <div id="lightboxModal" class="fixed inset-0 bg-slate-950/95 z-50 hidden flex flex-col items-center justify-between p-4 backdrop-blur-lg">
+        <div class="w-full flex items-center justify-between text-slate-300">
+            <span class="text-xs font-bold font-mono">معاينة مكبرة</span>
+            <button onclick="closeLightbox()" class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+        <div class="flex-1 flex items-center justify-center p-2 max-w-full max-h-full">
+            <img id="lightboxImg" src="" class="max-w-full max-h-full object-contain rounded-lg">
+        </div>
+        <div class="w-full flex justify-center pb-2">
+            <button onclick="copyLink('directUrlLh3'); closeLightbox();" class="px-5 py-2.5 bg-indigo-600 text-white font-bold text-xs rounded-xl shadow-glow flex items-center gap-2">
+                <i class="fa-solid fa-copy"></i>
+                <span>نسخ الرابط المباشر</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // State variables
+        let currentFileId = "1GvB12KdnUHb8dqbQYqXysWMiREP8qu4-";
+        let activeCodeTab = 'html';
+        let zoomLevel = 1;
+        let rotationDegree = 0;
+        let conversionHistory = JSON.parse(localStorage.getItem('drivepic_history') || '[]');
+        let googleAccessToken = null;
+        let googleTokenClient = null;
+        let lastUploadedFile = null;
+
+        function getDirectFormats(fileId) {
+            if (fileId.startsWith('http')) {
+                return { lh3: fileId, thumb: fileId, uc: fileId };
+            }
+            return {
+                lh3: `https://lh3.googleusercontent.com/d/${fileId}`,
+                thumb: `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`,
+                uc: `https://drive.usercontent.google.com/u/0/uc?id=${fileId}&export=view`
+            };
+        }
+
+        // Elements
+        const driveUrlInput = document.getElementById('driveUrlInput');
+        const clearInputBtn = document.getElementById('clearInputBtn');
+        const pasteBtn = document.getElementById('pasteBtn');
+        const convertBtn = document.getElementById('convertBtn');
+        const directUrlLh3 = document.getElementById('directUrlLh3');
+        const directUrlThumb = document.getElementById('directUrlThumb');
+        const directUrlUc = document.getElementById('directUrlUc');
+        const mainViewerImage = document.getElementById('mainViewerImage');
+        const imageLoading = document.getElementById('imageLoading');
+        const imageError = document.getElementById('imageError');
+        const imageDimensions = document.getElementById('imageDimensions');
+        const codeSnippetBox = document.getElementById('codeSnippetBox');
+        const historyListContainer = document.getElementById('historyListContainer');
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const connectDriveBtn = document.getElementById('connectDriveBtn');
+        const googleClientIdInput = document.getElementById('googleClientIdInput');
+        const driveAuthStatus = document.getElementById('driveAuthStatus');
+        const uploadResult = document.getElementById('uploadResult');
+        const uploadedDirectUrl = document.getElementById('uploadedDirectUrl');
+        const copyUploadedUrlBtn = document.getElementById('copyUploadedUrlBtn');
+        const viewUploadedBtn = document.getElementById('viewUploadedBtn');
+
+        googleClientIdInput.value = localStorage.getItem('drivepic_google_client_id') || '';
+        function setDriveStatus(message, connected = false) {
+            driveAuthStatus.textContent = message;
+            driveAuthStatus.className = connected ? 'text-[10px] text-emerald-300' : 'text-[10px] text-amber-300';
+        }
+        function initGoogleAuth() {
+            const clientId = googleClientIdInput.value.trim();
+            if (!clientId || !clientId.endsWith('.apps.googleusercontent.com')) {
+                showToast('أدخل OAuth Client ID صحيحاً أولاً', true); return false;
+            }
+            localStorage.setItem('drivepic_google_client_id', clientId);
+            if (!window.google || !google.accounts || !google.accounts.oauth2) {
+                showToast('جاري تحميل خدمة Google، حاول مرة أخرى', true); return false;
+            }
+            googleTokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file',
+                callback: (response) => {
+                    if (response.error) { setDriveStatus('فشل تسجيل الدخول'); showToast('تعذر تسجيل الدخول إلى Google Drive', true); return; }
+                    googleAccessToken = response.access_token;
+                    setDriveStatus('متصل بـ Google Drive', true);
+                    connectDriveBtn.textContent = 'متصل';
+                    showToast('تم ربط Google Drive بنجاح');
+                    if (lastUploadedFile) uploadToGoogleDrive(lastUploadedFile);
+                }
+            });
+            googleTokenClient.requestAccessToken({prompt: 'consent'});
+            return true;
+        }
+        connectDriveBtn.addEventListener('click', initGoogleAuth);
+        function handleSelectedFile(file) {
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { showToast('اختر ملف صورة فقط', true); return; }
+            if (file.size > 10 * 1024 * 1024) { showToast('حجم الصورة يجب ألا يتجاوز 10MB', true); return; }
+            lastUploadedFile = file;
+            dropZone.querySelector('p').textContent = file.name;
+            if (!googleAccessToken) { showToast('سجّل الدخول إلى Google Drive أولاً'); initGoogleAuth(); return; }
+            uploadToGoogleDrive(file);
+        }
+        async function uploadToGoogleDrive(file) {
+            if (!googleAccessToken) return;
+            uploadResult.classList.add('hidden');
+            dropZone.classList.add('opacity-60', 'pointer-events-none');
+            const boundary = 'drivepic_' + Date.now();
+            const metadata = {name: file.name, mimeType: file.type};
+            const body = new Blob([
+                '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
+                JSON.stringify(metadata), '\r\n--' + boundary + '\r\nContent-Type: ' + file.type + '\r\n\r\n',
+                file, '\r\n--' + boundary + '--'
+            ]);
+            try {
+                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType', {
+                    method: 'POST',
+                    headers: {'Authorization': 'Bearer ' + googleAccessToken, 'Content-Type': 'multipart/related; boundary=' + boundary}, body
+                });
+                if (!response.ok) throw new Error(await response.text());
+                const uploaded = await response.json();
+                const permissionResponse = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(uploaded.id) + '/permissions', {
+                    method: 'POST', headers: {'Authorization': 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'anyone', role: 'reader'})
+                });
+                if (!permissionResponse.ok) throw new Error(await permissionResponse.text());
+                const directUrl = getDirectFormats(uploaded.id).uc;
+                uploadedDirectUrl.value = directUrl;
+                uploadResult.classList.remove('hidden');
+                updateLinksAndLoad(uploaded.id);
+                showToast('تم رفع الصورة وتحويلها إلى رابط مباشر');
+            } catch (error) {
+                console.error(error);
+                showToast('تعذر الرفع. تأكد من تفعيل Drive API وصلاحيات OAuth', true);
+            } finally { dropZone.classList.remove('opacity-60', 'pointer-events-none'); }
+        }
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (event) => handleSelectedFile(event.target.files[0]));
+        ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.add('border-indigo-400', 'bg-slate-900'); }));
+        ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.remove('border-indigo-400', 'bg-slate-900'); }));
+        dropZone.addEventListener('drop', event => handleSelectedFile(event.dataTransfer.files[0]));
+        copyUploadedUrlBtn.addEventListener('click', () => { navigator.clipboard.writeText(uploadedDirectUrl.value); showToast('تم نسخ الرابط المباشر'); });
+        viewUploadedBtn.addEventListener('click', () => { if (uploadedDirectUrl.value) window.open(uploadedDirectUrl.value, '_blank', 'noopener'); });
+
+        // Extract ID
+        function extractDriveFileId(url) {
+            if (!url) return null;
+            if (url.includes('dropbox.com')) {
+                return url.replace('?dl=0', '').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+            }
+            const fileDMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+            if (fileDMatch && fileDMatch[1]) return fileDMatch[1];
+            const idParamMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            if (idParamMatch && idParamMatch[1]) return idParamMatch[1];
+            const lh3Match = url.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+            if (lh3Match && lh3Match[1]) return lh3Match[1];
+            if (/^[a-zA-Z0-9_-]{25,}$/.test(url.trim())) return url.trim();
+            return null;
+        }
+
+        function updateLinksAndLoad(fileId) {
+            currentFileId = fileId;
+            const formats = getDirectFormats(fileId);
+
+            directUrlLh3.value = formats.lh3;
+            directUrlThumb.value = formats.thumb;
+            directUrlUc.value = formats.uc;
+
+            imageLoading.classList.remove('hidden');
+            imageError.classList.add('hidden');
+            mainViewerImage.src = formats.lh3;
+
+            updateCodeSnippets(formats.lh3);
+            addToHistory(fileId, formats.lh3);
+        }
+
+        // Image Load Handlers
+        mainViewerImage.addEventListener('load', () => {
+            imageLoading.classList.add('hidden');
+            imageError.classList.add('hidden');
+            imageDimensions.textContent = `${mainViewerImage.naturalWidth} × ${mainViewerImage.naturalHeight}px`;
+        });
+
+        mainViewerImage.addEventListener('error', () => {
+            imageLoading.classList.add('hidden');
+            const formats = getDirectFormats(currentFileId);
+            if (mainViewerImage.src !== formats.thumb) {
+                mainViewerImage.src = formats.thumb;
+            } else {
+                imageError.classList.remove('hidden');
+            }
+        });
+
+        function processConversion() {
+            const inputVal = driveUrlInput.value.trim();
+            const extractedId = extractDriveFileId(inputVal);
+            if (extractedId) {
+                updateLinksAndLoad(extractedId);
+                showToast("تم تحويل واستخراج الرابط المباشر!");
+            } else {
+                showToast("يرجى التأكد من الرابط المدخل", true);
+            }
+        }
+
+        convertBtn.addEventListener('click', processConversion);
+        driveUrlInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') processConversion(); });
+
+        // Tab Switcher
+        window.switchMainTab = function(tabName) {
+            document.getElementById('tabConverter').classList.add('hidden');
+            document.getElementById('tabUpload').classList.add('hidden');
+            document.getElementById('tabHistory').classList.add('hidden');
+
+            document.getElementById('navBtnConverter').className = "flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 transition";
+            document.getElementById('navBtnUpload').className = "flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 transition";
+            document.getElementById('navBtnHistory').className = "flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 transition";
+
+            if (tabName === 'converter') {
+                document.getElementById('tabConverter').classList.remove('hidden');
+                document.getElementById('navBtnConverter').className = "flex flex-col items-center gap-1 text-indigo-400 transition";
+            } else if (tabName === 'upload') {
+                document.getElementById('tabUpload').classList.remove('hidden');
+                document.getElementById('navBtnUpload').className = "flex flex-col items-center gap-1 text-indigo-400 transition";
+            } else if (tabName === 'history') {
+                document.getElementById('tabHistory').classList.remove('hidden');
+                document.getElementById('navBtnHistory').className = "flex flex-col items-center gap-1 text-indigo-400 transition";
+                renderHistory();
+            }
+        };
+
+        document.getElementById('quickUploadTopBtn').addEventListener('click', () => switchMainTab('upload'));
+
+        // Code Snippets Generator
+        window.switchCodeTab = function(type) {
+            activeCodeTab = type;
+            ['Html', 'Css', 'Md', 'Bb'].forEach(t => {
+                const btn = document.getElementById('codeTab' + t);
+                btn.className = "flex-1 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition";
+            });
+            document.getElementById('codeTab' + type.charAt(0).toUpperCase() + type.slice(1)).className = "flex-1 py-1.5 rounded-lg font-bold bg-indigo-600 text-white transition";
+            updateCodeSnippets(directUrlLh3.value);
+        };
+
+        function updateCodeSnippets(url) {
+            if (activeCodeTab === 'html') {
+                codeSnippetBox.value = `<img src="${url}" alt="Direct Image" />`;
+            } else if (activeCodeTab === 'css') {
+                codeSnippetBox.value = `background-image: url('${url}');`;
+            } else if (activeCodeTab === 'md') {
+                codeSnippetBox.value = `![Image](${url})`;
+            } else if (activeCodeTab === 'bb') {
+                codeSnippetBox.value = `[img]${url}[/img]`;
+            }
+        }
+
+        window.copyCodeSnippet = function() {
+            navigator.clipboard.writeText(codeSnippetBox.value);
+            showToast("تم نسخ الكود البرمجي بنجاح!");
+        };
+
+        // Zoom & Rotate
+        document.getElementById('zoomInBtn').addEventListener('click', () => {
+            zoomLevel += 0.2;
+            applyTransform();
+        });
+        document.getElementById('zoomOutBtn').addEventListener('click', () => {
+            if (zoomLevel > 0.4) zoomLevel -= 0.2;
+            applyTransform();
+        });
+        document.getElementById('rotateBtn').addEventListener('click', () => {
+            rotationDegree = (rotationDegree + 90) % 360;
+            applyTransform();
+        });
+        function applyTransform() {
+            mainViewerImage.style.transform = `scale(${zoomLevel}) rotate(${rotationDegree}deg)`;
+        }
+
+        // Fullscreen Lightbox
+        document.getElementById('fullScreenBtn').addEventListener('click', () => {
+            document.getElementById('lightboxImg').src = mainViewerImage.src;
+            document.getElementById('lightboxModal').classList.remove('hidden');
+        });
+        window.closeLightbox = function() {
+            document.getElementById('lightboxModal').classList.add('hidden');
+        };
+
+        // History Management
+        function addToHistory(fileId, url) {
+            const exists = conversionHistory.some(item => item.id === fileId);
+            if (!exists) {
+                conversionHistory.unshift({ id: fileId, url: url, date: new Date().toLocaleTimeString('ar-EG') });
+                if (conversionHistory.length > 15) conversionHistory.pop();
+                localStorage.setItem('drivepic_history', JSON.stringify(conversionHistory));
+            }
+        }
+
+        function renderHistory() {
+            if (conversionHistory.length === 0) {
+                historyListContainer.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">لا يوجد صور في السجل حالياً</div>`;
+                return;
+            }
+            historyListContainer.innerHTML = conversionHistory.map((item, idx) => `
+                <div class="p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2.5 truncate">
+                        <img src="${item.url}" class="w-8 h-8 rounded-lg object-cover bg-slate-950">
+                        <div class="truncate">
+                            <p class="font-mono text-[10px] text-slate-300 truncate">${item.id}</p>
+                            <span class="text-[9px] text-slate-500">${item.date}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="updateLinksAndLoad('${item.id}'); switchMainTab('converter');" class="px-2 py-1 bg-indigo-600/20 text-indigo-300 rounded-lg text-[10px] font-bold">عرض</button>
+                        <button onclick="deleteHistoryItem(${idx})" class="w-6 h-6 text-slate-500 hover:text-rose-400"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.deleteHistoryItem = function(idx) {
+            conversionHistory.splice(idx, 1);
+            localStorage.setItem('drivepic_history', JSON.stringify(conversionHistory));
+            renderHistory();
+        };
+
+        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+            conversionHistory = [];
+            localStorage.removeItem('drivepic_history');
+            renderHistory();
+        });
+
+        // Copy Helper & Toast
+        window.copyLink = function(elemId) {
+            const val = document.getElementById(elemId).value;
+            navigator.clipboard.writeText(val);
+            showToast("تم نسخ الرابط المباشر بنجاح!");
+        };
+
+        let toastTimeout;
+        function showToast(msg, isError = false) {
+            clearTimeout(toastTimeout);
+            document.getElementById('toastMessage').textContent = msg;
+            document.getElementById('toastIcon').className = isError 
+                ? "fa-solid fa-circle-xmark text-rose-400 text-sm" 
+                : "fa-solid fa-circle-check text-emerald-400 text-sm";
+            const toast = document.getElementById('toast');
+            toast.classList.remove('translate-y-10', 'opacity-0', 'pointer-events-none');
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+
+        // Paste & Clear
+        pasteBtn.addEventListener('click', async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                    driveUrlInput.value = text;
+                    clearInputBtn.classList.remove('hidden');
+                    processConversion();
+                }
+            } catch (err) {
+                showToast("يرجى لصق الرابط يدوياً", true);
+            }
+        });
+
+        driveUrlInput.addEventListener('input', () => {
+            clearInputBtn.classList.toggle('hidden', !driveUrlInput.value);
+        });
+
+        clearInputBtn.addEventListener('click', () => {
+            driveUrlInput.value = '';
+            clearInputBtn.classList.add('hidden');
+        });
+
+        // Init Load
+        window.addEventListener('load', () => {
+            driveUrlInput.value = `https://drive.google.com/file/d/${currentFileId}/view?usp=drivesdk`;
+            clearInputBtn.classList.remove('hidden');
+            updateLinksAndLoad(currentFileId);
+        });
+    </script>
+</body>
+</html>
