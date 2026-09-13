@@ -10,7 +10,6 @@
     
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     
     <!-- Google Fonts: Cairo & Plus Jakarta Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -372,28 +371,15 @@
                         <input type="file" id="fileInput" accept="image/*" class="hidden">
                     </div>
 
-                    <!-- Google Drive OAuth Setup -->
+                    <!-- Manual upload via phone share menu -->
                     <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col gap-2">
                         <div class="flex items-center justify-between gap-2">
-                            <span class="text-[11px] font-bold text-slate-200 flex items-center gap-1.5"><i class="fa-brands fa-google text-amber-400"></i> ربط Google Drive</span>
-                            <span id="driveAuthStatus" class="text-[10px] text-amber-300">غير متصل</span>
+                            <span class="text-[11px] font-bold text-slate-200 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-amber-400"></i> رفع يدوي إلى Google Drive</span>
+                            <span class="text-[10px] text-emerald-300">بدون OAuth</span>
                         </div>
-                        <p class="text-[10px] leading-relaxed text-slate-500">أدخل OAuth Client ID من Google Cloud مرة واحدة. لا تضع أي مفتاح سري داخل الصفحة.</p>
-                        <div class="flex gap-2">
-                            <input id="googleClientIdInput" type="text" dir="ltr" placeholder="123...apps.googleusercontent.com" class="min-w-0 flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-indigo-500">
-                            <button id="connectDriveBtn" class="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/25 rounded-lg text-[10px] font-bold whitespace-nowrap btn-active">تسجيل الدخول</button>
-                        </div>
-                        <p class="text-[10px] text-slate-600">فعّل Google Drive API وأنشئ OAuth Client من نوع Web application، وأضف نطاق الموقع ضمن Authorized JavaScript origins.</p>
-                    </div>
-
-                    <!-- Upload Result -->
-                    <div id="uploadResult" class="hidden p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/25 flex flex-col gap-2">
-                        <div class="flex items-center gap-2 text-emerald-300 text-[11px] font-bold"><i class="fa-solid fa-circle-check"></i> تم الرفع إلى Google Drive</div>
-                        <input id="uploadedDirectUrl" readonly dir="ltr" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-[10px] font-mono text-emerald-300 focus:outline-none">
-                        <div class="flex gap-2">
-                            <button id="copyUploadedUrlBtn" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold btn-active"><i class="fa-solid fa-copy"></i> نسخ الرابط المباشر</button>
-                            <button id="viewUploadedBtn" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-bold btn-active">عرض</button>
-                        </div>
+                        <p class="text-[10px] leading-relaxed text-slate-500">اختر الصورة ثم اختر Google Drive من قائمة المشاركة. بعد الرفع افتح Drive وانسخ رابط المشاركة يدوياً.</p>
+                        <button id="shareToDriveBtn" class="w-full py-2.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/25 rounded-lg text-[11px] font-bold btn-active"><i class="fa-solid fa-arrow-up-from-bracket"></i> اختيار الصورة وفتح المشاركة</button>
+                        <p id="manualDriveStatus" class="hidden text-[10px] text-emerald-300"></p>
                     </div>
 
                     <!-- External Fast Upload Links Alternative -->
@@ -488,9 +474,6 @@
         let zoomLevel = 1;
         let rotationDegree = 0;
         let conversionHistory = JSON.parse(localStorage.getItem('drivepic_history') || '[]');
-        let googleAccessToken = null;
-        let googleTokenClient = null;
-        let lastUploadedFile = null;
 
         function getDirectFormats(fileId) {
             if (fileId.startsWith('http')) {
@@ -519,93 +502,38 @@
         const historyListContainer = document.getElementById('historyListContainer');
         const fileInput = document.getElementById('fileInput');
         const dropZone = document.getElementById('dropZone');
-        const connectDriveBtn = document.getElementById('connectDriveBtn');
-        const googleClientIdInput = document.getElementById('googleClientIdInput');
-        const driveAuthStatus = document.getElementById('driveAuthStatus');
-        const uploadResult = document.getElementById('uploadResult');
-        const uploadedDirectUrl = document.getElementById('uploadedDirectUrl');
-        const copyUploadedUrlBtn = document.getElementById('copyUploadedUrlBtn');
-        const viewUploadedBtn = document.getElementById('viewUploadedBtn');
+        const shareToDriveBtn = document.getElementById('shareToDriveBtn');
+        const manualDriveStatus = document.getElementById('manualDriveStatus');
 
-        googleClientIdInput.value = localStorage.getItem('drivepic_google_client_id') || '';
-        function setDriveStatus(message, connected = false) {
-            driveAuthStatus.textContent = message;
-            driveAuthStatus.className = connected ? 'text-[10px] text-emerald-300' : 'text-[10px] text-amber-300';
-        }
-        function initGoogleAuth() {
-            const clientId = googleClientIdInput.value.trim();
-            if (!clientId || !clientId.endsWith('.apps.googleusercontent.com')) {
-                showToast('أدخل OAuth Client ID صحيحاً أولاً', true); return false;
-            }
-            localStorage.setItem('drivepic_google_client_id', clientId);
-            if (!window.google || !google.accounts || !google.accounts.oauth2) {
-                showToast('جاري تحميل خدمة Google، حاول مرة أخرى', true); return false;
-            }
-            googleTokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: 'https://www.googleapis.com/auth/drive.file',
-                callback: (response) => {
-                    if (response.error) { setDriveStatus('فشل تسجيل الدخول'); showToast('تعذر تسجيل الدخول إلى Google Drive', true); return; }
-                    googleAccessToken = response.access_token;
-                    setDriveStatus('متصل بـ Google Drive', true);
-                    connectDriveBtn.textContent = 'متصل';
-                    showToast('تم ربط Google Drive بنجاح');
-                    if (lastUploadedFile) uploadToGoogleDrive(lastUploadedFile);
-                }
-            });
-            googleTokenClient.requestAccessToken({prompt: 'consent'});
-            return true;
-        }
-        connectDriveBtn.addEventListener('click', initGoogleAuth);
-        function handleSelectedFile(file) {
+        function shareSelectedFile(file) {
             if (!file) return;
             if (!file.type.startsWith('image/')) { showToast('اختر ملف صورة فقط', true); return; }
             if (file.size > 10 * 1024 * 1024) { showToast('حجم الصورة يجب ألا يتجاوز 10MB', true); return; }
-            lastUploadedFile = file;
             dropZone.querySelector('p').textContent = file.name;
-            if (!googleAccessToken) { showToast('سجّل الدخول إلى Google Drive أولاً'); initGoogleAuth(); return; }
-            uploadToGoogleDrive(file);
+            if (!navigator.share || !navigator.canShare || !navigator.canShare({files: [file]})) {
+                manualDriveStatus.textContent = 'المتصفح لا يدعم مشاركة الملفات. افتح تطبيق Google Drive وارفع الصورة من داخله.';
+                manualDriveStatus.classList.remove('hidden');
+                window.open('https://drive.google.com/drive/my-drive', '_blank', 'noopener');
+                return;
+            }
+            navigator.share({
+                files: [file],
+                title: 'رفع صورة إلى Google Drive',
+                text: 'اختر Google Drive من قائمة المشاركة لحفظ الصورة'
+            }).then(() => {
+                manualDriveStatus.textContent = 'تم فتح المشاركة. اختر Google Drive، ثم انسخ رابط المشاركة من Drive بعد اكتمال الرفع.';
+                manualDriveStatus.classList.remove('hidden');
+            }).catch((error) => {
+                if (error.name !== 'AbortError') showToast('تعذر فتح قائمة المشاركة', true);
+            });
         }
-        async function uploadToGoogleDrive(file) {
-            if (!googleAccessToken) return;
-            uploadResult.classList.add('hidden');
-            dropZone.classList.add('opacity-60', 'pointer-events-none');
-            const boundary = 'drivepic_' + Date.now();
-            const metadata = {name: file.name, mimeType: file.type};
-            const body = new Blob([
-                '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
-                JSON.stringify(metadata), '\r\n--' + boundary + '\r\nContent-Type: ' + file.type + '\r\n\r\n',
-                file, '\r\n--' + boundary + '--'
-            ]);
-            try {
-                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType', {
-                    method: 'POST',
-                    headers: {'Authorization': 'Bearer ' + googleAccessToken, 'Content-Type': 'multipart/related; boundary=' + boundary}, body
-                });
-                if (!response.ok) throw new Error(await response.text());
-                const uploaded = await response.json();
-                const permissionResponse = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(uploaded.id) + '/permissions', {
-                    method: 'POST', headers: {'Authorization': 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'anyone', role: 'reader'})
-                });
-                if (!permissionResponse.ok) throw new Error(await permissionResponse.text());
-                const directUrl = getDirectFormats(uploaded.id).uc;
-                uploadedDirectUrl.value = directUrl;
-                uploadResult.classList.remove('hidden');
-                updateLinksAndLoad(uploaded.id);
-                showToast('تم رفع الصورة وتحويلها إلى رابط مباشر');
-            } catch (error) {
-                console.error(error);
-                showToast('تعذر الرفع. تأكد من تفعيل Drive API وصلاحيات OAuth', true);
-            } finally { dropZone.classList.remove('opacity-60', 'pointer-events-none'); }
-        }
+
+        shareToDriveBtn.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (event) => handleSelectedFile(event.target.files[0]));
+        fileInput.addEventListener('change', (event) => shareSelectedFile(event.target.files[0]));
         ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.add('border-indigo-400', 'bg-slate-900'); }));
         ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.remove('border-indigo-400', 'bg-slate-900'); }));
-        dropZone.addEventListener('drop', event => handleSelectedFile(event.dataTransfer.files[0]));
-        copyUploadedUrlBtn.addEventListener('click', () => { navigator.clipboard.writeText(uploadedDirectUrl.value); showToast('تم نسخ الرابط المباشر'); });
-        viewUploadedBtn.addEventListener('click', () => { if (uploadedDirectUrl.value) window.open(uploadedDirectUrl.value, '_blank', 'noopener'); });
+        dropZone.addEventListener('drop', event => shareSelectedFile(event.dataTransfer.files[0]));
 
         // Extract ID
         function extractDriveFileId(url) {
